@@ -1,19 +1,18 @@
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="Dashboard Profil Mahasiswa", layout="wide")
+st.set_page_config(page_title="Dashboard Mahasiswa", layout="wide")
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data_mahasiswaimport os
-import streamlit as st
-import pandas as pd
-import plotly.express as px
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, "data_mahasiswa_sintesis.csv")
+    df = pd.read_csv(file_path)
+    return df
 
-# ... (kode konfigurasi halaman lainnya tetap sama)
-
-@st.cache_data
+df = load_data()@st.cache_data
 def load_data():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(base_dir, "data_mahasiswa_sintesis.csv")
