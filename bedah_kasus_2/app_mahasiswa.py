@@ -1,154 +1,130 @@
-import os
+# app_mahasiswa.py
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import os
 
-st.set_page_config(page_title="Dashboard Mahasiswa", layout="wide")
+# ============================================================
+# Konfigurasi Halaman
+# ============================================================
+st.set_page_config(
+    page_title="Bedah Kasus 2 - Data Mahasiswa",
+    page_icon="🎓",
+    layout="wide"
+)
 
+# ============================================================
+# Fungsi Load Data
+# ============================================================
 @st.cache_data
-def load_data():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(base_dir, "data_mahasiswa_sintesis.csv")
-    df = pd.read_csv(file_path)
-    return df
+def load_data(path: str = "data_sintesis.csv") -> pd.DataFrame:
+    """
+    Membaca file CSV dan mengembalikan DataFrame.
+    Jika file tidak ditemukan, coba beberapa lokasi alternatif.
+    """
+    kandidat_path = [
+        path,
+        os.path.join("data", path),
+        os.path.join("bedah_kasus_2", path),
+        os.path.join(os.path.dirname(__file__), path),
+    ]
+    for p in kandidat_path:
+        if os.path.exists(p):
+            return pd.read_csv(p)
 
-df = load_data()@st.cache_data
-def load_data():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(base_dir, "data_mahasiswa_sintesis.csv")
-    df = pd.read_csv(file_path)
-    return df
+    st.error(
+        f"❌ File '{path}' tidak ditemukan. "
+        f"Pastikan file CSV berada di folder yang sama dengan script ini."
+    )
+    st.stop()
 
-df = load_data()_sintesis.csv")
-    return df
 
-df = load_data()
+# ============================================================
+# Muat Data  <-- INI BAGIAN YANG TADI ERROR (baris ~22)
+# ============================================================
+df = load_data("data_sintesis.csv")
 
-st.title("🎓 Dashboard Profil Mahasiswa")
-st.markdown("Bedah Kasus 2: Dataset Profil Mahasiswa")
 
-# ================= SIDEBAR FILTER =================
-st.sidebar.header("Filter Data")
+# ============================================================
+# Sidebar - Filter
+# ============================================================
+st.sidebar.header("🔎 Filter Data")
 
-fakultas = st.sidebar.multiselect(
-    "Pilih Fakultas",
-    options=sorted(df["Fakultas"].unique()),
-    default=sorted(df["Fakultas"].unique())
+# Filter otomatis untuk kolom kategorikal (jika ada)
+filtered_df = df.copy()
+
+for col in df.select_dtypes(include=["object", "category"]).columns:
+    unique_vals = df[col].dropna().unique().tolist()
+    if 1 < len(unique_vals) <= 30:  # batasi agar sidebar tidak penuh
+        pilihan = st.sidebar.multiselect(f"{col}", options=unique_vals, default=unique_vals)
+        filtered_df = filtered_df[filtered_df[col].isin(pilihan)]
+
+# Filter numerik (opsional)
+for col in df.select_dtypes(include=["number"]).columns:
+    min_val = float(df[col].min())
+    max_val = float(df[col].max())
+    if min_val < max_val:
+        rentang = st.sidebar.slider(
+            f"{col}",
+            min_value=min_val,
+            max_value=max_val,
+            value=(min_val, max_val)
+        )
+        filtered_df = filtered_df[
+            (filtered_df[col] >= rentang[0]) & (filtered_df[col] <= rentang[1])
+        ]
+
+
+# ============================================================
+# Header & Ringkasan
+# ============================================================
+st.title("🎓 Bedah Kasus 2 — Dashboard Data Mahasiswa")
+st.markdown("Aplikasi ini menampilkan data sintesis mahasiswa yang dapat difilter melalui sidebar.")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("📄 Total Baris", f"{len(filtered_df):,}")
+col2.metric("📊 Total Kolom", f"{df.shape[1]}")
+if "IPK" in filtered_df.columns:
+    col3.metric("📈 Rata-rata IPK", f"{filtered_df['IPK'].mean():.2f}")
+else:
+    col3.metric("📈 Rata-rata (kolom numerik)", 
+                f"{filtered_df.select_dtypes('number').mean().mean():.2f}"
+                if not filtered_df.select_dtypes('number').empty else "-")
+
+st.divider()
+
+
+# ============================================================
+# Tabel Data
+# ============================================================
+st.subheader("📋 Tabel Data")
+st.dataframe(filtered_df, use_container_width=True)
+
+
+# ============================================================
+# Statistik Deskriptif
+# ============================================================
+with st.expander("📈 Statistik Deskriptif"):
+    st.write(filtered_df.describe(include="all"))
+
+
+# ============================================================
+# Grafik (jika ada kolom numerik)
+# ============================================================
+num_cols = filtered_df.select_dtypes(include=["number"]).columns.tolist()
+if num_cols:
+    st.subheader("📊 Visualisasi")
+    kolom_grafik = st.selectbox("Pilih kolom untuk histogram:", num_cols)
+    st.bar_chart(filtered_df[kolom_grafik].value_counts().sort_index())
+
+
+# ============================================================
+# Unduh Data
+# ============================================================
+st.subheader("⬇️ Unduh Data")
+csv = filtered_df.to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="Download data terfilter (CSV)",
+    data=csv,
+    file_name="data_mahasiswa_filtered.csv",
+    mime="text/csv"
 )
-
-jurusan = st.sidebar.multiselect(
-    "Pilih Jurusan",
-    options=sorted(df["Jurusan"].unique()),
-    default=sorted(df["Jurusan"].unique())
-)
-
-gender = st.sidebar.multiselect(
-    "Pilih Gender",
-    options=sorted(df["Gender"].unique()),
-    default=sorted(df["Gender"].unique())
-)
-
-semester_range = st.sidebar.slider(
-    "Rentang Semester",
-    min_value=int(df["Semester"].min()),
-    max_value=int(df["Semester"].max()),
-    value=(int(df["Semester"].min()), int(df["Semester"].max()))
-)
-
-df_filtered = df[
-    df["Fakultas"].isin(fakultas) &
-    df["Jurusan"].isin(jurusan) &
-    df["Gender"].isin(gender) &
-    (df["Semester"] >= semester_range[0]) &
-    (df["Semester"] <= semester_range[1])
-]
-
-# ================= METRICS =================
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Mahasiswa", f"{len(df_filtered):,}")
-col2.metric("Rata-rata IPK", f"{df_filtered['IPK'].mean():.2f}")
-col3.metric("Rata-rata Usia", f"{df_filtered['Usia'].mean():.1f} thn")
-col4.metric("Jumlah Jurusan", f"{df_filtered['Jurusan'].nunique()}")
-
-# ================= CHART 1: Kategorik =================
-st.subheader("📊 Analisis Kategorik")
-col1, col2 = st.columns(2)
-
-with col1:
-    jur = df_filtered["Jurusan"].value_counts().reset_index()
-    jur.columns = ["Jurusan", "Jumlah"]
-    fig = px.bar(jur, x="Jumlah", y="Jurusan", orientation="h",
-                 title="Jumlah Mahasiswa per Jurusan",
-                 text="Jumlah", color="Jumlah",
-                 color_continuous_scale="Blues")
-    fig.update_layout(yaxis=dict(categoryorder="total ascending"))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    sem = df_filtered["Semester"].value_counts().sort_index().reset_index()
-    sem.columns = ["Semester", "Jumlah"]
-    sem["Semester"] = sem["Semester"].astype(str)
-    fig = px.bar(sem, x="Semester", y="Jumlah",
-                 title="Distribusi Semester (Ordinal)",
-                 text="Jumlah", color="Jumlah",
-                 color_continuous_scale="Greens")
-    st.plotly_chart(fig, use_container_width=True)
-
-# ================= CHART 2: Numerik Kontinu =================
-st.subheader("📈 Analisis Numerik Kontinu")
-col1, col2 = st.columns(2)
-
-with col1:
-    fig = px.histogram(df_filtered, x="IPK", nbins=25,
-                       title="Distribusi IPK",
-                       marginal="box",
-                       color_discrete_sequence=["#636EFA"])
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    fig = px.histogram(df_filtered, x="Usia", nbins=15,
-                       title="Distribusi Usia",
-                       marginal="box",
-                       color_discrete_sequence=["#EF553B"])
-    st.plotly_chart(fig, use_container_width=True)
-
-# ================= CHART 3: Box Plot =================
-st.subheader("📦 Sebaran IPK per Kategori")
-col1, col2 = st.columns(2)
-
-with col1:
-    fig = px.box(df_filtered, x="Fakultas", y="IPK", color="Fakultas",
-                 title="Sebaran IPK per Fakultas")
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    fig = px.box(df_filtered, x="Gender", y="IPK", color="Gender",
-                 title="Sebaran IPK per Gender")
-    st.plotly_chart(fig, use_container_width=True)
-
-# ================= CHART 4: Komposisi =================
-st.subheader("🥧 Komposisi & Perbandingan")
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    gen = df_filtered["Gender"].value_counts().reset_index()
-    gen.columns = ["Gender", "Jumlah"]
-    fig = px.pie(gen, names="Gender", values="Jumlah",
-                 title="Komposisi Gender", hole=0.4)
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    ipk_jur = df_filtered.groupby("Jurusan")["IPK"].mean().reset_index().sort_values("IPK", ascending=False)
-    fig = px.bar(ipk_jur, x="Jurusan", y="IPK",
-                 title="Rata-rata IPK per Jurusan",
-                 text=ipk_jur["IPK"].round(2), color="IPK",
-                 color_continuous_scale="RdYlGn")
-    fig.update_layout(xaxis_tickangle=-30)
-    st.plotly_chart(fig, use_container_width=True)
-
-# ================= DATA TABLE =================
-st.subheader("📋 Data Mahasiswa")
-st.dataframe(df_filtered, use_container_width=True)
-
-csv = df_filtered.to_csv(index=False).encode("utf-8")
-st.download_button("Download Data Filtered (CSV)", csv, "data_mahasiswa_filtered.csv", "text/csv")
